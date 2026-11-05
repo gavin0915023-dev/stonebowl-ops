@@ -1,0 +1,24 @@
+services:
+  stonebowl:
+    image: stonebowl-demo:1.0.0
+    build:
+      context: .
+    ports:
+      - "${HTTP_PORT:-8080}:8080"
+    environment:
+      PUBLIC_ORIGIN: "${PUBLIC_ORIGIN:-http://localhost:8080}"
+      PORT: "8080"
+    volumes:
+      - stonebowl_demo_data:/app/.wrangler/state
+    restart: unless-stopped
+    init: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 256
+    mem_limit: 1g
+    stop_grace_period: 15s
+
+volumes:
+  stonebowl_demo_data:
