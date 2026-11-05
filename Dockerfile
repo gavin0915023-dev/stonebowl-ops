@@ -1,5 +1,5 @@
-# syntax=docker/dockerfile:1
-FROM node:24-bookworm-slim AS build
+ARG NODE_IMAGE=node:24-bookworm-slim
+FROM ${NODE_IMAGE} AS build
 WORKDIR /app
 ENV CI=true WRANGLER_SEND_METRICS=false CLOUDFLARE_CF_FETCH_ENABLED=false
 RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates libatomic1 && rm -rf /var/lib/apt/lists/*
@@ -9,7 +9,7 @@ COPY . .
 RUN node --test tests/domain.test.mjs tests/container.test.mjs
 RUN npm run build && node scripts/container-validate.mjs
 
-FROM node:24-bookworm-slim AS runtime
+FROM ${NODE_IMAGE} AS runtime
 WORKDIR /app
 ENV NODE_ENV=production CI=true WRANGLER_SEND_METRICS=false CLOUDFLARE_CF_FETCH_ENABLED=false PORT=8080 PUBLIC_ORIGIN=http://localhost:8080
 RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates libatomic1 && rm -rf /var/lib/apt/lists/*

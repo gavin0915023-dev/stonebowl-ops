@@ -11,6 +11,6 @@ https://stonebowl-ops-yang-20261105.limberimpala1.chatgpt.site
 
 ---
 
-发布状态：待应用部署验证成功，并连接可发布到 X 的账号。不要把“已准备草稿”当作“已在 X 发布”。
+发布状态：站点平台已确认部署成功；当前环境自动访问被 Cloudflare 拦截，浏览器验收尚未完成。X 发布账号尚未连接，本文未发布。不要把“已准备草稿”当作“已在 X 发布”。
 
-Docker 交付：项目包含 Dockerfile、Compose、公开演示网关与持久化迁移。当前开发机没有 Docker，尚未构建镜像，也未推送镜像仓库。构建及导出步骤见 DEPLOY.md。
+Docker 交付：项目包含 Dockerfile、Compose、公开演示网关与持久化迁移。已在现有 WSL Ubuntu 中配置 Docker；镜像构建、导出状态以实际交付文件为准，源代码包本身不是镜像。构建及导出步骤见 DEPLOY.md。

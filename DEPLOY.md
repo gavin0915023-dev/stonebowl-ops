@@ -36,6 +36,14 @@ docker build -t stonebowl-demo:1.0.0 .
 docker save -o stonebowl-demo-1.0.0.tar stonebowl-demo:1.0.0
 ```
 
+如果 Docker Hub 网络超时，可只为这一次构建指定 Docker 官方在 AWS ECR Public 分发的 Node 基础镜像，不改宿主 Docker 配置：
+
+```sh
+docker build --build-arg NODE_IMAGE=public.ecr.aws/docker/library/node:24-bookworm-slim -t stonebowl-demo:1.0.0 .
+```
+
+该来源可在 [AWS ECR 的 Docker 官方 Node Gallery](https://gallery.ecr.aws/docker/library/node) 核对。默认仍使用 `node:24-bookworm-slim`。镜像层下载、构建和启动需分别验证；仅取得 manifest 不能证明已构建镜像。
+
 在另一台机器执行 `docker load -i stonebowl-demo-1.0.0.tar`，再运行 `docker compose up -d --no-build`。未执行成功的 `docker build` 不能称为已产出镜像；此项目提供的是可构建镜像的完整源文件。
 
 ## 持久化、迁移与升级
