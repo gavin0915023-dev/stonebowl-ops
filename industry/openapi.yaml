@@ -1,0 +1,260 @@
+openapi: 3.1.0
+info:
+  title: 石小满 · 接单出餐工作台 API
+  version: 1.0.0
+  description: |
+    订单状态与工作区接口契约。容器公开演示网关会拒绝营业模式与非白名单写接口；
+    本契约不含美团开放平台推送、回调验签与状态回传（尚未接入）。
+servers:
+  - url: /
+    description: 容器网关 8080 端口
+
+paths:
+  /healthz:
+    get:
+      operationId: health
+      summary: 容器健康检查
+      responses:
+        '200':
+          description: 就绪状态
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string, enum: [ready, starting] }
+                  mode: { type: string, enum: [public-demo] }
+        '503': { description: 服务正在启动 }
+
+  /container/session:
+    get:
+      operationId: getSession
+      summary: 当前访客演示会话
+      responses:
+        '200':
+          description: 会话状态
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  mode: { type: string, enum: [demo] }
+                  publicDemo: { type: boolean }
+                  authenticated: { type: boolean }
+    post:
+      operationId: createSession
+      summary: 进入演示空间（签署演示确认）
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              required: [consent]
+              properties:
+                consent: { type: string, const: demo }
+      responses:
+        '303': { description: 签发会话 Cookie 并跳转首页 }
+        '429': { description: 创建演示空间过于频繁 }
+
+  /container/logout:
+    post:
+      operationId: logout
+      summary: 退出演示空间
+      responses:
+        '303': { description: 清除会话并跳转 }
+
+  /api/workspace:
+    get:
+      operationId: getWorkspace
+      summary: 工作区聚合数据
+      parameters:
+        - name: mode
+          in: query
+          required: true
+          schema: { type: string, enum: [demo, live] }
+      responses:
+        '200':
+          description: 订单、进行中订单与门店设置
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Workspace' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { description: 公开演示仅允许 demo 模式 }
+
+  /api/orders:
+    post:
+      operationId: createOrder
+      summary: 创建订单（从 new 开始）
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/NewOrder' }
+      responses:
+        '200':
+          description: 创建的订单
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Order' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '403': { description: 仅允许 demo 模式 }
+
+  /api/orders/{id}:
+    patch:
+      operationId: transitionOrder
+      summary: 推进订单状态（禁止跳级与回退）
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [status]
+              properties:
+                status: { $ref: '#/components/schemas/OrderStatus' }
+                reason: { type: string, minLength: 1, maxLength: 200, description: 取消时必填 }
+      responses:
+        '200':
+          description: 更新后的订单
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Order' }
+        '409': { description: 当前状态不支持该操作或并发版本冲突 }
+
+  /api/demo:
+    post:
+      operationId: seedDemoOrders
+      summary: 载入虚构演示订单
+      responses:
+        '200': { description: 已生成示例订单 }
+
+  /api/import:
+    post:
+      operationId: importOrders
+      summary: 按规范 JSON 导入（非美团原生格式）
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [mode, orders]
+              properties:
+                mode: { type: string, enum: [demo, live] }
+                orders:
+                  type: array
+                  minItems: 1
+                  maxItems: 100
+                  items: { $ref: '#/components/schemas/NewOrder' }
+      responses:
+        '200': { description: 导入结果（同一来源+外部单号去重） }
+        '400': { $ref: '#/components/responses/BadRequest' }
+
+  /api/settings:
+    put:
+      operationId: updateSettings
+      summary: 更新门店设置
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/Settings' }
+      responses:
+        '200':
+          description: 更新后的设置
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Settings' }
+
+components:
+  responses:
+    BadRequest:
+      description: 输入校验失败
+      content:
+        application/json:
+          schema:
+            type: object
+            properties: { error: { type: string } }
+    Unauthorized:
+      description: 请先进入演示空间
+      content:
+        application/json:
+          schema:
+            type: object
+            properties: { error: { type: string } }
+
+  schemas:
+    OrderStatus:
+      type: string
+      enum: [new, preparing, ready, handed_over, cancelled]
+    OrderItem:
+      type: object
+      required: [name, quantity, unitPriceCents]
+      properties:
+        name: { type: string, maxLength: 100 }
+        spec: { type: string, maxLength: 100 }
+        quantity: { type: integer, minimum: 1, maximum: 99 }
+        unitPriceCents: { type: integer, minimum: 0, maximum: 1000000 }
+    NewOrder:
+      type: object
+      required: [mode, channel, customerName, deliveryType, note, items]
+      properties:
+        mode: { type: string, enum: [demo, live] }
+        externalId: { type: string, maxLength: 100 }
+        channel: { type: string, enum: [manual, meituan-import] }
+        customerName: { type: string, maxLength: 40 }
+        deliveryType: { type: string, enum: [delivery, pickup] }
+        note: { type: string, maxLength: 500 }
+        prepMinutes: { type: integer, minimum: 3, maximum: 120 }
+        items:
+          type: array
+          minItems: 1
+          maxItems: 40
+          items: { $ref: '#/components/schemas/OrderItem' }
+    Settings:
+      type: object
+      required: [storeName, prepMinutes]
+      properties:
+        storeName: { type: string, minLength: 1, maxLength: 60 }
+        prepMinutes: { type: integer, minimum: 3, maximum: 120 }
+    Order:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        number: { type: string }
+        status: { $ref: '#/components/schemas/OrderStatus' }
+        customerName: { type: string }
+        deliveryType: { type: string }
+        note: { type: string }
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/OrderItem' }
+        amountCents: { type: integer, description: 服务端按整数分计算 }
+        createdAt: { type: integer, format: int64 }
+        dueAt: { type: integer, format: int64 }
+        version: { type: integer, minimum: 1 }
+        events:
+          type: array
+          items:
+            type: object
+            properties:
+              status: { type: string }
+              at: { type: integer, format: int64 }
+              actor: { type: string }
+              reason: { type: string }
+    Workspace:
+      type: object
+      properties:
+        orders:
+          type: array
+          items: { $ref: '#/components/schemas/Order' }
+        activeOrders:
+          type: array
+          items: { $ref: '#/components/schemas/Order' }
+        settings: { $ref: '#/components/schemas/Settings' }

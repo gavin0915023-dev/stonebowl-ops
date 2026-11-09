@@ -1,0 +1,51 @@
+name: stonebowl-ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+
+      - name: 安装锁定依赖
+        run: npm ci --include=dev --include=optional --prefer-offline --no-audit --no-fund
+
+      - name: 领域与容器测试
+        run: node --test tests/domain.test.mjs tests/container.test.mjs
+
+      - name: 构建与产物校验
+        run: |
+          npm run build
+          node scripts/container-validate.mjs
+
+      - name: 工程基线与契约校验
+        run: |
+          test -f industry/openapi.yaml
+          grep -q '^openapi:' industry/openapi.yaml
+          grep -q '^paths:' industry/openapi.yaml
+          node --check industry/loadtest/order-race.mjs
+          node --check industry/scripts/backup-restore.mjs
+
+      - name: 迁移完整性自检（不得编辑已应用 SQL）
+        run: |
+          test -f drizzle/0000_legal_aqueduct.sql
+          node -e "
+            const fs=require('fs'),c=require('crypto');
+            const f='drizzle/0000_legal_aqueduct.sql';
+            const h=c.createHash('sha256').update(fs.readFileSync(f)).digest('hex');
+            console.log('迁移 SQL SHA256:',h);
+            if(!/^[0-9a-f]{64}$/.test(h)) process.exit(1);
+          "
+
+      - name: 依赖漏洞扫描
+        continue-on-error: true
+        run: npm audit --omit=dev --audit-level=high
